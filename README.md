@@ -1,72 +1,122 @@
-Quieres documentación formal para tu API con JWT, roles, SQLite y Swagger personalizado. Milagro, alguien que sí estructura su proyecto. Me agrada. Aquí tienes tu **README.md** listo para copiar y pegar. Sin sarcasmo dentro, porque esto va para tu repositorio, no para terapia grupal.
+---
+
+# API de Gestión de Estudiantes
+
+API desarrollada con **FastAPI** que permite la gestión completa de estudiantes con autenticación basada en roles (`admin` y `user`), panel web y documentación protegida.
 
 ---
 
-# 🎓 API de Gestión de Estudiantes con FastAPI + JWT
+# ¿Qué hace esta API?
 
-API REST desarrollada con **FastAPI** que permite gestionar estudiantes con autenticación basada en JWT y control de roles (admin / usuario).
+Esta aplicación permite:
+
+## Administrador
+
+* Ver todos los estudiantes
+* Buscar estudiante por ID
+* Crear estudiantes
+* Actualizar estudiantes
+* Eliminar estudiantes
+* Acceder a Swagger personalizado protegido
+
+## Usuario Normal
+
+* Iniciar sesión
+* Acceder a panel web
+* Buscar estudiante por ID
+* Visualizar lista de estudiantes
 
 ---
 
-## 🚀 Tecnologías Utilizadas
+# Tecnologías Utilizadas
 
-* Python 3.10+
 * FastAPI
-* SQLite
 * SQLAlchemy
-* JWT (python-jose)
-* Passlib (bcrypt)
-* Swagger UI personalizado
+* SQLite
+* Pydantic
+* Jinja2
+* JWT (autenticación personalizada)
+* Docker
+* Docker Compose
 
 ---
 
-## 📁 Estructura del Proyecto
+# Estructura del Proyecto
 
 ```
-📦 proyecto
- ┣ 📜 main.py        # Archivo principal (API y endpoints)
- ┣ 📜 auth.py        # Lógica de autenticación y JWT
- ┣ 📜 estudiantes.db # Base de datos SQLite (se crea automáticamente)
- ┗ 📜 README.md
+mi-api-xd/
+│
+├── main.py
+├── auth.py
+├── estudiantes.db
+├── requirements.txt
+├── Dockerfile
+├── compose.yaml
+├── README.md
+│
+├── templates/
+│   ├── login.html
+│   ├── panel_usuario.html
+│   └── swagger_admin.html
+│
+└── venv/
 ```
 
 ---
 
-## ⚙️ Instalación
+# Requisitos
 
-### 1️⃣ Crear entorno virtual
+* Python 3.10 o superior
+* pip
+* Docker (opcional)
+* Docker Compose (opcional)
 
-```bash
+---
+
+# Ejecución en Entorno Local (VS Code)
+
+## 1️⃣ Clonar el repositorio
+
+```
+git clone <url-del-repositorio>
+cd mi-api-xd
+```
+
+---
+
+## 2️⃣ Crear entorno virtual
+
+```
 python -m venv venv
 ```
 
-Activar:
+Activar entorno:
 
 Windows:
 
-```bash
+```
 venv\Scripts\activate
 ```
 
-Mac/Linux:
+Mac / Linux:
 
-```bash
+```
 source venv/bin/activate
 ```
 
 ---
 
-### 2️⃣ Instalar dependencias
+## 3️⃣ Instalar dependencias
 
-```bash
-pip install fastapi uvicorn sqlalchemy python-jose passlib[bcrypt] python-multipart
+```
+pip install -r requirements.txt
 ```
 
 ---
 
-### 3️⃣ Ejecutar el servidor
+## 4️⃣ Ejecutar el servidor
 
-```bash
+```
 uvicorn main:app --reload
 ```
 
@@ -78,190 +128,91 @@ http://127.0.0.1:8000
 
 ---
 
-## 🔐 Autenticación
+# Accesos
 
-La API usa **JWT (Bearer Token)**.
+* Login:
+  [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 
-### Usuarios de prueba:
+* Swagger (solo admin):
+  [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-| Usuario | Contraseña | Rol     |
-| ------- | ---------- | ------- |
-| admin   | admin123   | admin   |
-| user    | user123    | usuario |
-
----
-
-### 🔑 Obtener Token
-
-**POST** `/token`
-
-Body (x-www-form-urlencoded):
-
-```
-username=admin
-password=admin123
-```
-
-Respuesta:
-
-```json
-{
-  "access_token": "TOKEN_GENERADO",
-  "token_type": "bearer",
-  "rol": "admin"
-}
-```
+* Panel usuario:
+  [http://127.0.0.1:8000/panel-usuario](http://127.0.0.1:8000/panel-usuario)
 
 ---
 
-### 🔎 Verificar Token
+# Ejecutar con Docker
 
-**GET** `/verificar`
-
-Header:
+## Construir imagen
 
 ```
-Authorization: Bearer TU_TOKEN
+docker build -t api-estudiantes .
+```
+
+## Ejecutar contenedor
+
+```
+docker run -p 8000:8000 api-estudiantes
+```
+
+Acceder en:
+
+```
+http://localhost:8000
 ```
 
 ---
 
-## 👨‍🎓 Endpoints de Estudiantes
-
-### 🔍 Listar estudiantes
-
-**GET** `/estudiantes`
-Requiere usuario autenticado.
-
----
-
-### 🔍 Obtener estudiante por ID
-
-**GET** `/estudiantes/{id}`
-Requiere usuario autenticado.
-
----
-
-### ➕ Crear estudiante
-
-**POST** `/estudiantes`
-Solo rol **admin**
-
-Body (form-data):
-
-* nombre
-* edad
-* sexo
-* correo
-* telefono
-* direccion
-* carrera
-
----
-
-### ✏️ Editar estudiante
-
-**PUT** `/estudiantes/{id}`
-Solo rol **admin**
-
----
-
-### ❌ Eliminar estudiante
-
-**DELETE** `/estudiantes/{id}`
-Solo rol **admin**
-
----
-
-## 🛡 Control de Roles
-
-* `require_user` → Permite cualquier usuario autenticado.
-* `require_admin` → Solo permite usuarios con rol `admin`.
-
----
-
-## 🗄 Base de Datos
-
-Se utiliza SQLite.
-
-Archivo generado automáticamente:
+# Ejecutar con Docker Compose
 
 ```
-estudiantes.db
+docker compose up --build
 ```
 
-Tabla creada:
+Detener:
 
-```sql
-CREATE TABLE estudiantes (
-    id INTEGER PRIMARY KEY,
-    nombre TEXT NOT NULL,
-    edad INTEGER NOT NULL,
-    sexo TEXT NOT NULL,
-    correo TEXT UNIQUE NOT NULL,
-    telefono TEXT NOT NULL,
-    direccion TEXT NOT NULL,
-    carrera TEXT NOT NULL
-);
+```
+docker compose down
 ```
 
 ---
 
-## 📘 Swagger Personalizado
+# Base de Datos
 
-Ruta:
-
-```
-/docs/admin
-```
-
-Interfaz estilizada con CSS personalizado.
+* Motor: SQLite
+* Archivo: `estudiantes.db`
+* Se crea automáticamente al iniciar la aplicación
 
 ---
 
-## 🔒 Seguridad Implementada
+# Seguridad
 
-* Autenticación JWT
-* Hash de contraseñas con bcrypt
-* Control de roles
-* Protección de endpoints mediante Depends()
+* Autenticación mediante JWT almacenado en cookie HTTPOnly
+* Sistema de roles:
 
----
-
-## 🧠 Flujo de Autenticación
-
-1. Usuario envía credenciales a `/token`
-2. Se valida contraseña con bcrypt
-3. Se genera JWT con:
-
-   * sub (username)
-   * rol
-   * exp (fecha de expiración)
-4. Usuario usa el token en el header:
-
-   ```
-   Authorization: Bearer TOKEN
-   ```
-5. Dependencias validan autenticación y rol
+  * admin
+  * user
+* Swagger protegido solo para administradores
 
 ---
 
-## 🧪 Probar en Postman
+# Endpoints Principales
 
-1. POST → `/token`
-2. Copiar `access_token`
-3. En Headers:
-
-   ```
-   Authorization: Bearer TOKEN
-   ```
-4. Probar endpoints protegidos
-
----
-
-## 👨‍💻 Autor
-
-Industria TilinosDevelopers S.A de C.V. 
-Ing. Tilino Developer Master.
+| Método | Endpoint          | Rol   |
+| ------ | ----------------- | ----- |
+| GET    | /estudiantes      | Admin |
+| GET    | /estudiantes/{id} | Admin |
+| POST   | /estudiantes      | Admin |
+| PUT    | /estudiantes/{id} | Admin |
+| DELETE | /estudiantes/{id} | Admin |
 
 ---
+
+# Desarrollador
+
+**Industria TilinosDevelopers S.A de C.V.**
+
+**Autor:** Tilino Developer Master
+
+
+

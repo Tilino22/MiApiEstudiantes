@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .                     # construye desde el Dockerfile actual
+    container_name: mi-api-xd
+    ports:
+      - "8000:8000"              # host:contenedor (cambia si usas otro puerto)
+    volumes:
+      - .:/app                   # monta tu código → cambios en vivo (útil en dev)
+      - ./estudiantes.db:/app/estudiantes.db  # persiste la DB fuera del contenedor
+    environment:
+      - PYTHONUNBUFFERED=1       # logs en tiempo real
+      - ENVIRONMENT=development  # variable que puedes usar en tu código
+    restart: unless-stopped      # opcional: reinicia si falla

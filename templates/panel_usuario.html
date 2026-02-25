@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Panel Usuario</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #333;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #444;
+        }
+
+        h2 {
+            margin-top: 30px;
+            color: #555;
+        }
+
+        form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            flex: 1;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-buscar {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-buscar:hover {
+            background: #5a67d8;
+        }
+
+        .btn-limpiar {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-limpiar:hover {
+            background: #c53030;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background-color: #f5f7ff;
+        }
+
+        .error {
+            background: #ffe5e5;
+            color: #cc0000;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+
+        .resultado {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Bienvenido {{ usuario }}</h1>
+
+    <h2>Buscar estudiante por ID</h2>
+
+    <form method="get" action="/panel-usuario">
+        <input type="number" name="buscar_id" placeholder="Ingrese ID" required>
+        <button type="submit" class="btn-buscar">Buscar</button>
+        <a href="/panel-usuario">
+            <button type="button" class="btn-limpiar">Limpiar</button>
+        </a>
+    </form>
+
+    {% if estudiante_encontrado %}
+        <div class="resultado">
+            <h3>Resultado:</h3>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Edad</th>
+                    <th>Sexo</th>
+                    <th>Correo</th>
+                    <th>Teléfono</th>
+                    <th>Dirección</th>
+                    <th>Carrera</th>
+                </tr>
+                <tr>
+                    <td>{{ estudiante_encontrado.id }}</td>
+                    <td>{{ estudiante_encontrado.nombre }}</td>
+                    <td>{{ estudiante_encontrado.edad }}</td>
+                    <td>{{ estudiante_encontrado.sexo }}</td>
+                    <td>{{ estudiante_encontrado.correo }}</td>
+                    <td>{{ estudiante_encontrado.telefono }}</td>
+                    <td>{{ estudiante_encontrado.direccion }}</td>
+                    <td>{{ estudiante_encontrado.carrera }}</td>
+                </tr>
+            </table>
+        </div>
+    {% elif buscar_realizado %}
+        <div class="error">
+            No se encontró ningún estudiante con ese ID.
+        </div>
+    {% endif %}
+
+    <h2>Lista completa</h2>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Edad</th>
+            <th>Sexo</th>
+            <th>Correo</th>
+            <th>Teléfono</th>
+            <th>Dirección</th>
+            <th>Carrera</th>
+        </tr>
+
+        {% for estudiante in estudiantes %}
+        <tr>
+            <td>{{ estudiante.id }}</td>
+            <td>{{ estudiante.nombre }}</td>
+            <td>{{ estudiante.edad }}</td>
+            <td>{{ estudiante.sexo }}</td>
+            <td>{{ estudiante.correo }}</td>
+            <td>{{ estudiante.telefono }}</td>
+            <td>{{ estudiante.direccion }}</td>
+            <td>{{ estudiante.carrera }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+</div>
+
+</body>
+</html>

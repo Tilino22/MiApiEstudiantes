@@ -1,10 +1,7 @@
-# ==============================
-# main.py
-# ==============================
-
-from fastapi import FastAPI, HTTPException, Form, Depends, Response, Cookie
+from fastapi import FastAPI, HTTPException, Form, Depends, Cookie, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -32,15 +29,24 @@ class EstudianteDB(Base):
 
 Base.metadata.create_all(bind=engine)
 
-class EstudianteOut(BaseModel):
-    id: int
+# ==============================
+# MODELOS PYDANTIC
+# ==============================
+
+class EstudianteBase(BaseModel):
     nombre: str
-    edad: str
+    edad: int
     sexo: str
     correo: str
     telefono: str
     direccion: str
     carrera: str
+
+class EstudianteCreate(EstudianteBase):
+    pass
+
+class EstudianteOut(EstudianteBase):
+    id: int
 
     class Config:
         from_attributes = True
@@ -50,9 +56,10 @@ class EstudianteOut(BaseModel):
 # ==============================
 
 app = FastAPI(docs_url=None, redoc_url=None)
+templates = Jinja2Templates(directory="templates")
 
 # ==============================
-# DEPENDENCIA QUE LEE TOKEN DE COOKIE
+# AUTH
 # ==============================
 
 def get_current_user(access_token: str = Cookie(None)):
@@ -67,59 +74,130 @@ def get_current_user(access_token: str = Cookie(None)):
 
     return payload
 
-
-def require_user(user: dict = Depends(get_current_user)):
-    return user
-
-
 def require_admin(user: dict = Depends(get_current_user)):
     if user["rol"] != "admin":
         raise HTTPException(status_code=403, detail="Solo administradores")
     return user
 
+def require_normal_user(user: dict = Depends(get_current_user)):
+    if user["rol"] != "user":
+        raise HTTPException(status_code=403, detail="Solo usuarios normales")
+    return user
+
 # ==============================
-# TOKEN PARA SWAGGER
+# CRUD ESTUDIANTES (SOLO ADMIN)
 # ==============================
 
-@app.post("/token")
-def login_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = auth.authenticate_user(form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+@app.get("/estudiantes", response_model=list[EstudianteOut])
+def obtener_estudiantes(current_user: dict = Depends(require_admin)):
+    db = SessionLocal()
+    estudiantes = db.query(EstudianteDB).all()
+    db.close()
+    return estudiantes
 
-    access_token = auth.create_token(
-        data={"sub": user["username"], "rol": user["rol"]}
+
+@app.get("/estudiantes/{id}", response_model=EstudianteOut)
+def obtener_estudiante(id: int, current_user: dict = Depends(require_admin)):
+    db = SessionLocal()
+    estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
+    db.close()
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    return estudiante
+
+
+@app.post("/estudiantes", response_model=EstudianteOut)
+def crear_estudiante(
+    nombre: str = Form(...),
+    edad: int = Form(...),
+    sexo: str = Form(...),
+    correo: str = Form(...),
+    telefono: str = Form(...),
+    direccion: str = Form(...),
+    carrera: str = Form(...),
+    current_user: dict = Depends(require_admin)
+):
+    db = SessionLocal()
+
+    nuevo = EstudianteDB(
+        nombre=nombre,
+        edad=edad,
+        sexo=sexo,
+        correo=correo,
+        telefono=telefono,
+        direccion=direccion,
+        carrera=carrera
     )
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    db.close()
+
+    return nuevo
+
+
+@app.put("/estudiantes/{id}", response_model=EstudianteOut)
+def actualizar_estudiante(
+    id: int,
+    nombre: str = Form(...),
+    edad: int = Form(...),
+    sexo: str = Form(...),
+    correo: str = Form(...),
+    telefono: str = Form(...),
+    direccion: str = Form(...),
+    carrera: str = Form(...),
+    current_user: dict = Depends(require_admin)
+):
+    db = SessionLocal()
+    estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
+
+    if not estudiante:
+        db.close()
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    estudiante.nombre = nombre
+    estudiante.edad = edad
+    estudiante.sexo = sexo
+    estudiante.correo = correo
+    estudiante.telefono = telefono
+    estudiante.direccion = direccion
+    estudiante.carrera = carrera
+
+    db.commit()
+    db.refresh(estudiante)
+    db.close()
+
+    return estudiante
+
+
+@app.delete("/estudiantes/{id}")
+def eliminar_estudiante(id: int, current_user: dict = Depends(require_admin)):
+    db = SessionLocal()
+    estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
+
+    if not estudiante:
+        db.close()
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    db.delete(estudiante)
+    db.commit()
+    db.close()
+
+    return {"mensaje": "Estudiante eliminado correctamente"}
 
 # ==============================
-# LOGIN HTML
+# LOGIN Y PANEL (OCULTOS EN SWAGGER)
 # ==============================
 
-@app.get("/", response_class=HTMLResponse)
-def login_page():
-    return """
-    <html>
-    <body style="font-family:Arial; text-align:center; margin-top:100px;">
-        <h2>API Estudiantes</h2>
-        <form method="post" action="/login-web">
-            <input name="username" placeholder="Usuario" required/><br><br>
-            <input name="password" type="password" placeholder="Contraseña" required/><br><br>
-            <button type="submit">Entrar</button>
-        </form>
-    </body>
-    </html>
-    """
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
 
-# ==============================
-# LOGIN WEB (GENERA TOKEN Y LO GUARDA EN COOKIE)
-# ==============================
 
-@app.post("/login-web")
+@app.post("/login-web", include_in_schema=False)
 def login_web(username: str = Form(...), password: str = Form(...)):
     user = auth.authenticate_user(username, password)
 
@@ -143,111 +221,39 @@ def login_web(username: str = Form(...), password: str = Form(...)):
 
     return response
 
-# ==============================
-# PANEL USUARIO
-# ==============================
 
-@app.get("/panel-usuario", response_class=HTMLResponse)
-def panel_usuario(current_user: dict = Depends(require_user)):
+@app.get("/panel-usuario", response_class=HTMLResponse, include_in_schema=False)
+def panel_usuario(
+    request: Request,
+    buscar_id: int = None,
+    current_user: dict = Depends(require_normal_user)
+):
     db = SessionLocal()
+
     estudiantes = db.query(EstudianteDB).all()
+    estudiante_encontrado = None
+    buscar_realizado = False
+
+    if buscar_id:
+        buscar_realizado = True
+        estudiante_encontrado = db.query(EstudianteDB).filter(
+            EstudianteDB.id == buscar_id
+        ).first()
+
     db.close()
 
-    filas = ""
-    for e in estudiantes:
-        filas += f"""
-        <tr>
-            <td>{e.id}</td>
-            <td>{e.nombre}</td>
-            <td>{e.carrera}</td>
-        </tr>
-        """
-
-    return f"""
-    <html>
-    <body style="font-family:Arial; padding:40px;">
-        <h1>Panel Usuario</h1>
-        <table border="1" cellpadding="10">
-            <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Carrera</th>
-            </tr>
-            {filas}
-        </table>
-    </body>
-    </html>
-    """
+    return templates.TemplateResponse("panel_usuario.html", {
+        "request": request,
+        "estudiantes": estudiantes,
+        "usuario": current_user.get("sub"),
+        "estudiante_encontrado": estudiante_encontrado,
+        "buscar_realizado": buscar_realizado
+    })
 
 # ==============================
 # SWAGGER SOLO ADMIN
 # ==============================
 
 @app.get("/docs", include_in_schema=False)
-def custom_swagger(current_user: dict = Depends(require_admin)):
-    return HTMLResponse("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Panel Admin</title>
-        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
-    </head>
-    <body>
-        <div id="swagger-ui"></div>
-        <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-        <script>
-            SwaggerUIBundle({
-                url: '/openapi.json',
-                dom_id: '#swagger-ui'
-            });
-        </script>
-    </body>
-    </html>
-    """)
-
-# ==============================
-# CRUD SOLO ADMIN
-# ==============================
-
-@app.post("/estudiantes")
-def agregar_estudiante(
-    nombre: str = Form(...),
-    edad: int = Form(...),
-    sexo: str = Form(...),
-    correo: str = Form(...),
-    telefono: str = Form(...),
-    direccion: str = Form(...),
-    carrera: str = Form(...),
-    current_user: dict = Depends(require_admin)
-):
-    db = SessionLocal()
-    nuevo = EstudianteDB(
-        nombre=nombre,
-        edad=edad,
-        sexo=sexo,
-        correo=correo,
-        telefono=telefono,
-        direccion=direccion,
-        carrera=carrera
-    )
-    db.add(nuevo)
-    db.commit()
-    db.close()
-    return {"mensaje": "Estudiante agregado correctamente"}
-
-@app.delete("/estudiantes/{id}")
-def eliminar_estudiante(
-    id: int,
-    current_user: dict = Depends(require_admin)
-):
-    db = SessionLocal()
-    estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
-
-    if not estudiante:
-        db.close()
-        raise HTTPException(status_code=404, detail="No encontrado")
-
-    db.delete(estudiante)
-    db.commit()
-    db.close()
-    return {"mensaje": "Eliminado correctamente"}
+def custom_swagger(request: Request, current_user: dict = Depends(require_admin)):
+    return templates.TemplateResponse("swagger_admin.html", {"request": request})
