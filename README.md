@@ -78,7 +78,7 @@ mi-api-xd/
 ## 1️⃣ Clonar el repositorio
 
 ```
-git clone <url-del-repositorio>
+git clone <https://github.com/Tilino22/MiApiEstudiantes>
 cd mi-api-xd
 ```
 
