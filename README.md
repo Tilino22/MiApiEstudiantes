@@ -1,43 +1,35 @@
----
+# API Gestión de Estudiantes v3.2
 
-# API de Gestión de Estudiantes
+API REST desarrollada con FastAPI para la gestión de estudiantes con:
 
-API desarrollada con **FastAPI** que permite la gestión completa de estudiantes con autenticación basada en roles (`admin` y `user`), panel web y documentación protegida.
-
----
-
-# ¿Qué hace esta API?
-
-Esta aplicación permite:
-
-## Administrador
-
-* Ver todos los estudiantes
-* Buscar estudiante por ID
-* Crear estudiantes
-* Actualizar estudiantes
-* Eliminar estudiantes
-* Acceder a Swagger personalizado protegido
-
-## Usuario Normal
-
-* Iniciar sesión
-* Acceder a panel web
-* Buscar estudiante por ID
-* Visualizar lista de estudiantes
+* Autenticación por API Key generada dinámicamente
+* Control de roles (`admin`, `usuario`)
+* Base de datos SQLite real con SQLAlchemy
+* CRUD completo protegido
 
 ---
 
-# Tecnologías Utilizadas
+# Tecnologías
 
-* FastAPI
-* SQLAlchemy
+* FastAPI 0.110.0
+* Uvicorn 0.29.0
+* SQLAlchemy 2.0.29
 * SQLite
-* Pydantic
-* Jinja2
-* JWT (autenticación personalizada)
+* Passlib + Bcrypt
 * Docker
-* Docker Compose
+
+---
+
+# Clonar el Repositorio
+
+Si deseas obtener el proyecto desde GitHub:
+
+```
+git clone https://github.com/Tilino22/Api_Estudiantes.git
+cd mi-api-xd
+```
+
+Asegúrate de estar dentro del directorio del proyecto antes de continuar.
 
 ---
 
@@ -48,73 +40,208 @@ mi-api-xd/
 │
 ├── main.py
 ├── auth.py
-├── estudiantes.db
 ├── requirements.txt
 ├── Dockerfile
 ├── compose.yaml
-├── README.md
-│
-├── templates/
-│   ├── login.html
-│   ├── panel_usuario.html
-│   └── swagger_admin.html
-│
-└── venv/
+├── estudiantes.db (se crea automáticamente)
+└── README.md
 ```
 
 ---
 
-# Requisitos
+# Base de Datos
 
-* Python 3.10 o superior
-* pip
-* Docker (opcional)
-* Docker Compose (opcional)
+Motor: SQLite
+Archivo: `estudiantes.db`
+Se crea automáticamente al iniciar la aplicación.
+
+Modelo Estudiante:
+
+* id (Integer, Primary Key)
+* nombre (String)
+* edad (Integer)
+* sexo (String)
+* correo (String)
+* telefono (String)
+* direccion (String)
+* carrera (String)
+* usuario_id (Integer, opcional)
 
 ---
 
-# Ejecución en Entorno Local (VS Code)
+# Autenticación
 
-## 1️⃣ Clonar el repositorio
+La API usa autenticación mediante API Key enviada en el header:
 
 ```
-git clone <https://github.com/Tilino22/MiApiEstudiantes>
-cd mi-api-xd
+X-API-Key: tu_api_key
+```
+
+⚠ No se permite enviar la API Key por URL.
+Si se detecta en query params, se devuelve error 400.
+
+---
+
+# Usuario Administrador por Defecto
+
+```
+username: admin
+password: admin123
+rol: admin
+```
+
+La API Key se genera al iniciar sesión.
+
+---
+
+# Flujo de Uso
+
+## 1️⃣ Registrar Usuario
+
+POST `/registro`
+
+Form-data:
+
+* username
+* password
+* rol (opcional, por defecto "usuario")
+
+---
+
+## 2️⃣ Login
+
+POST `/login`
+
+Form-data:
+
+* username
+* password
+
+Respuesta:
+
+```
+{
+  "mensaje": "Login exitoso",
+  "username": "admin",
+  "rol": "admin",
+  "api_key": "pk_xxxxxxxxx"
+}
+```
+
+Guarda esa `api_key`.
+
+---
+
+## 3️⃣ Usar Endpoints Protegidos
+
+En cada request protegida debes enviar:
+
+```
+X-API-Key: pk_xxxxxxxxx
 ```
 
 ---
 
-## 2️⃣ Crear entorno virtual
+# Endpoints
+
+## Público
+
+### GET /
+
+Verifica que la API esté funcionando.
+
+Disponible en:
 
 ```
-python -m venv venv
+http://localhost:8000
 ```
 
-Activar entorno:
+---
+
+## Documentación Swagger
+
+Disponible en:
+
+```
+http://localhost:8000/docs
+```
+
+Desde Swagger puedes probar todos los endpoints agregando el header `X-API-Key`.
+
+---
+
+## Protegidos
+
+### GET /estudiantes
+
+Lista todos los estudiantes.
+Requiere API Key válida.
+
+---
+
+### GET /estudiantes/{id}
+
+Obtiene estudiante por ID.
+
+---
+
+### POST /estudiantes
+
+Crea estudiante.
+
+Form-data requerido:
+
+* id
+* nombre
+* edad
+* sexo
+* correo
+* telefono
+* direccion
+* carrera
+* usuario_id (opcional)
+
+---
+
+### PUT /estudiantes/{id}
+
+Actualiza estudiante existente.
+Mismos campos que creación.
+
+---
+
+### DELETE /estudiantes/{id}
+
+Elimina estudiante.
+Requiere rol `admin`.
+
+---
+
+# Ejecutar en Local
+
+## 1. Crear entorno virtual
 
 Windows:
 
 ```
-venv\Scripts\activate
+python -m venv .venv
+.venv\Scripts\activate
 ```
 
-Mac / Linux:
+Mac/Linux:
 
 ```
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
----
-
-## 3️⃣ Instalar dependencias
+## 2. Instalar dependencias
 
 ```
 pip install -r requirements.txt
 ```
 
----
-
-## 4️⃣ Ejecutar el servidor
+## 3. Ejecutar servidor
 
 ```
 uvicorn main:app --reload
@@ -123,21 +250,14 @@ uvicorn main:app --reload
 Servidor disponible en:
 
 ```
-http://127.0.0.1:8000
+http://localhost:8000
 ```
 
----
+Documentación:
 
-# Accesos
-
-* Login:
-  [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-
-* Swagger (solo admin):
-  [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
-* Panel usuario:
-  [http://127.0.0.1:8000/panel-usuario](http://127.0.0.1:8000/panel-usuario)
+```
+http://localhost:8000/docs
+```
 
 ---
 
@@ -152,7 +272,7 @@ docker build -t api-estudiantes .
 ## Ejecutar contenedor
 
 ```
-docker run -p 8000:8000 api-estudiantes
+docker run -d --name api_estudiantes -p 8000:8000 api-estudiantes
 ```
 
 Acceder en:
@@ -161,12 +281,20 @@ Acceder en:
 http://localhost:8000
 ```
 
+Swagger:
+
+```
+http://localhost:8000/docs
+```
+
 ---
 
 # Ejecutar con Docker Compose
 
+Levantar:
+
 ```
-docker compose up --build
+docker compose up -d
 ```
 
 Detener:
@@ -175,44 +303,33 @@ Detener:
 docker compose down
 ```
 
----
+La aplicación estará disponible en:
 
-# Base de Datos
-
-* Motor: SQLite
-* Archivo: `estudiantes.db`
-* Se crea automáticamente al iniciar la aplicación
+```
+http://localhost:8000
+```
 
 ---
 
-# Seguridad
+# Seguridad Implementada
 
-* Autenticación mediante JWT almacenado en cookie HTTPOnly
-* Sistema de roles:
-
-  * admin
-  * user
-* Swagger protegido solo para administradores
+* Passwords encriptados con Bcrypt
+* API Key generada dinámicamente al hacer login
+* Validación de usuario activo
+* Restricción de eliminación solo para rol admin
+* Bloqueo de API Key en query params
 
 ---
 
-# Endpoints Principales
+# Versión
 
-| Método | Endpoint          | Rol   |
-| ------ | ----------------- | ----- |
-| GET    | /estudiantes      | Admin |
-| GET    | /estudiantes/{id} | Admin |
-| POST   | /estudiantes      | Admin |
-| PUT    | /estudiantes/{id} | Admin |
-| DELETE | /estudiantes/{id} | Admin |
+v3.2
+Autenticación por API Key dinámica + base de datos SQLite real.
 
 ---
 
 # Desarrollador
 
-**Industria TilinosDevelopers S.A de C.V.**
-
-**Autor:** Tilino Developer Master
-
-
+Industria TilinosDevelopers S.A de C.V.
+Autor: Tilino Developer Master
 
