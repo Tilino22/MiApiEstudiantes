@@ -1,115 +1,160 @@
-from fastapi import FastAPI, HTTPException, Form, Depends, Cookie, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+# ==========================================================
+# MAIN.PY - FORMULARIO + API KEY + BASE DE DATOS REAL
+# ==========================================================
+
+from fastapi import FastAPI, HTTPException, Depends, status, Security, Form
+from fastapi.security import APIKeyHeader
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from fastapi import Request
 import auth
 
-# ==============================
-# BASE DE DATOS
-# ==============================
+app = FastAPI(
+    title="API Gestión de Estudiantes",
+    version="3.2"
+)
+
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# ==========================================================
+# CONFIGURACIÓN BASE DE DATOS
+# ==========================================================
 
 DATABASE_URL = "sqlite:///./estudiantes.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+engine = create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 Base = declarative_base()
 
 class EstudianteDB(Base):
     __tablename__ = "estudiantes"
+
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     edad = Column(Integer, nullable=False)
     sexo = Column(String, nullable=False)
-    correo = Column(String, nullable=False, unique=True)
+    correo = Column(String, nullable=False)
     telefono = Column(String, nullable=False)
     direccion = Column(String, nullable=False)
     carrera = Column(String, nullable=False)
+    usuario_id = Column(Integer, nullable=True)
 
 Base.metadata.create_all(bind=engine)
 
-# ==============================
-# MODELOS PYDANTIC
-# ==============================
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class EstudianteBase(BaseModel):
-    nombre: str
-    edad: int
-    sexo: str
-    correo: str
-    telefono: str
-    direccion: str
-    carrera: str
+# ==========================================================
+# DEPENDENCIAS SEGURIDAD (NO TOCADAS)
+# ==========================================================
 
-class EstudianteCreate(EstudianteBase):
-    pass
+def get_current_user(
+    request: Request,
+    api_key: str = Security(api_key_header)
+):
+    # Bloquear si intentan enviar token por URL
+    if "api_key" in request.query_params or "X-API-Key" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail="Error pa, no eres un Tilino_Developer"
+        )
 
-class EstudianteOut(EstudianteBase):
-    id: int
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere API Key en header X-API-Key"
+        )
 
-    class Config:
-        from_attributes = True
+    user = auth.authenticate_with_api_key(api_key)
 
-# ==============================
-# FASTAPI
-# ==============================
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Key inválida o usuario inactivo"
+        )
 
-app = FastAPI(docs_url=None, redoc_url=None)
-templates = Jinja2Templates(directory="templates")
+    return user
 
-# ==============================
-# AUTH
-# ==============================
-
-def get_current_user(access_token: str = Cookie(None)):
-    if not access_token:
-        raise HTTPException(status_code=401, detail="No autenticado")
-
-    token = access_token.replace("Bearer ", "")
-    payload = auth.verify_token(token)
-
-    if payload is None:
-        raise HTTPException(status_code=401, detail="Token inválido")
-
-    return payload
-
-def require_admin(user: dict = Depends(get_current_user)):
+def admin_required(user: dict = Depends(get_current_user)):
     if user["rol"] != "admin":
-        raise HTTPException(status_code=403, detail="Solo administradores")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador"
+        )
     return user
 
-def require_normal_user(user: dict = Depends(get_current_user)):
-    if user["rol"] != "user":
-        raise HTTPException(status_code=403, detail="Solo usuarios normales")
-    return user
+# ==========================================================
+# ENDPOINTS PÚBLICOS (NO TOCADOS)
+# ==========================================================
 
-# ==============================
-# CRUD ESTUDIANTES (SOLO ADMIN)
-# ==============================
+@app.get("/")
+def root():
+    return {"mensaje": "API funcionando correctamente"}
 
-@app.get("/estudiantes", response_model=list[EstudianteOut])
-def obtener_estudiantes(current_user: dict = Depends(require_admin)):
-    db = SessionLocal()
-    estudiantes = db.query(EstudianteDB).all()
-    db.close()
-    return estudiantes
+@app.post("/registro")
+def registrar(
+    username: str = Form(...),
+    password: str = Form(...),
+    rol: str = Form("usuario")
+):
+    nuevo = auth.create_user(username, password, rol)
 
+    if not nuevo:
+        raise HTTPException(status_code=400, detail="El usuario ya existe")
 
-@app.get("/estudiantes/{id}", response_model=EstudianteOut)
-def obtener_estudiante(id: int, current_user: dict = Depends(require_admin)):
-    db = SessionLocal()
+    return nuevo
+
+@app.post("/login")
+def login(
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    resultado = auth.login_user(username, password)
+
+    if not resultado:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    return {
+        "mensaje": "Login exitoso",
+        "username": resultado["username"],
+        "rol": resultado["rol"],
+        "api_key": resultado["api_key"]
+    }
+
+# ==========================================================
+# CRUD ESTUDIANTES (ACTUALIZADO)
+# ==========================================================
+
+@app.get("/estudiantes")
+def listar_estudiantes(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(EstudianteDB).all()
+
+@app.get("/estudiantes/{id}")
+def obtener_estudiante(
+    id: int,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
-    db.close()
 
     if not estudiante:
-        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        raise HTTPException(status_code=404, detail="No encontrado")
 
     return estudiante
 
-
-@app.post("/estudiantes", response_model=EstudianteOut)
+@app.post("/estudiantes")
 def crear_estudiante(
+    id: int = Form(...),
     nombre: str = Form(...),
     edad: int = Form(...),
     sexo: str = Form(...),
@@ -117,29 +162,36 @@ def crear_estudiante(
     telefono: str = Form(...),
     direccion: str = Form(...),
     carrera: str = Form(...),
-    current_user: dict = Depends(require_admin)
+    usuario_id: int = Form(None),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    db = SessionLocal()
+    existente = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
+
+    if existente:
+        raise HTTPException(status_code=400, detail="ID ya existe")
 
     nuevo = EstudianteDB(
+        id=id,
         nombre=nombre,
         edad=edad,
         sexo=sexo,
         correo=correo,
         telefono=telefono,
         direccion=direccion,
-        carrera=carrera
+        carrera=carrera,
+        usuario_id=usuario_id
     )
 
     db.add(nuevo)
     db.commit()
-    db.refresh(nuevo)
-    db.close()
 
-    return nuevo
+    return {
+        "mensaje": "Estudiante creado",
+        "creado_por": user["username"]
+    }
 
-
-@app.put("/estudiantes/{id}", response_model=EstudianteOut)
+@app.put("/estudiantes/{id}")
 def actualizar_estudiante(
     id: int,
     nombre: str = Form(...),
@@ -149,14 +201,14 @@ def actualizar_estudiante(
     telefono: str = Form(...),
     direccion: str = Form(...),
     carrera: str = Form(...),
-    current_user: dict = Depends(require_admin)
+    usuario_id: int = Form(None),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    db = SessionLocal()
     estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
 
     if not estudiante:
-        db.close()
-        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        raise HTTPException(status_code=404, detail="No encontrado")
 
     estudiante.nombre = nombre
     estudiante.edad = edad
@@ -165,95 +217,24 @@ def actualizar_estudiante(
     estudiante.telefono = telefono
     estudiante.direccion = direccion
     estudiante.carrera = carrera
+    estudiante.usuario_id = usuario_id
 
     db.commit()
-    db.refresh(estudiante)
-    db.close()
 
-    return estudiante
-
+    return {"mensaje": "Estudiante actualizado"}
 
 @app.delete("/estudiantes/{id}")
-def eliminar_estudiante(id: int, current_user: dict = Depends(require_admin)):
-    db = SessionLocal()
+def eliminar_estudiante(
+    id: int,
+    user: dict = Depends(admin_required),
+    db: Session = Depends(get_db)
+):
     estudiante = db.query(EstudianteDB).filter(EstudianteDB.id == id).first()
 
     if not estudiante:
-        db.close()
-        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+        raise HTTPException(status_code=404, detail="No encontrado")
 
     db.delete(estudiante)
     db.commit()
-    db.close()
 
-    return {"mensaje": "Estudiante eliminado correctamente"}
-
-# ==============================
-# LOGIN Y PANEL (OCULTOS EN SWAGGER)
-# ==============================
-
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
-def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
-
-
-@app.post("/login-web", include_in_schema=False)
-def login_web(username: str = Form(...), password: str = Form(...)):
-    user = auth.authenticate_user(username, password)
-
-    if not user:
-        raise HTTPException(status_code=400, detail="Credenciales incorrectas")
-
-    access_token = auth.create_token(
-        data={"sub": user["username"], "rol": user["rol"]}
-    )
-
-    response = RedirectResponse(
-        url="/docs" if user["rol"] == "admin" else "/panel-usuario",
-        status_code=302
-    )
-
-    response.set_cookie(
-        key="access_token",
-        value=f"Bearer {access_token}",
-        httponly=True
-    )
-
-    return response
-
-
-@app.get("/panel-usuario", response_class=HTMLResponse, include_in_schema=False)
-def panel_usuario(
-    request: Request,
-    buscar_id: int = None,
-    current_user: dict = Depends(require_normal_user)
-):
-    db = SessionLocal()
-
-    estudiantes = db.query(EstudianteDB).all()
-    estudiante_encontrado = None
-    buscar_realizado = False
-
-    if buscar_id:
-        buscar_realizado = True
-        estudiante_encontrado = db.query(EstudianteDB).filter(
-            EstudianteDB.id == buscar_id
-        ).first()
-
-    db.close()
-
-    return templates.TemplateResponse("panel_usuario.html", {
-        "request": request,
-        "estudiantes": estudiantes,
-        "usuario": current_user.get("sub"),
-        "estudiante_encontrado": estudiante_encontrado,
-        "buscar_realizado": buscar_realizado
-    })
-
-# ==============================
-# SWAGGER SOLO ADMIN
-# ==============================
-
-@app.get("/docs", include_in_schema=False)
-def custom_swagger(request: Request, current_user: dict = Depends(require_admin)):
-    return templates.TemplateResponse("swagger_admin.html", {"request": request})
+    return {"mensaje": "Estudiante eliminado"}

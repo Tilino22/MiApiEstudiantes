@@ -1,70 +1,94 @@
+# ==========================================================
+# AUTH.PY - AUTENTICACIÓN PROFESIONAL CON LOGIN + API KEY
+# ==========================================================
+
 from passlib.context import CryptContext
-from jose import JWTError, jwt
-from datetime import datetime, timedelta
-from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import secrets
 
-# ==============================
-# CONFIG
-# ==============================
-
-SECRET_KEY = "supersecretkey"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# ==========================================================
+# CONFIGURACIÓN
+# ==========================================================
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ==============================
-# USUARIOS SIMULADOS
-# ==============================
+# ==========================================================
+# BASE DE DATOS SIMULADA
+# ==========================================================
 
 usuarios = {
     "admin": {
         "username": "admin",
         "password": pwd_context.hash("admin123"),
-        "rol": "admin"
-    },
-    "user": {
-        "username": "user",
-        "password": pwd_context.hash("user123"),
-        "rol": "user"
+        "rol": "admin",
+        "activo": True,
+        "api_key": None
     }
 }
 
-# ==============================
-# MODELO TOKEN
-# ==============================
+# ==========================================================
+# UTILIDADES
+# ==========================================================
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
 
-# ==============================
-# FUNCIONES
-# ==============================
-
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
+def generar_api_key() -> str:
+    return f"pk_{secrets.token_urlsafe(32)}"
 
-def authenticate_user(username: str, password: str):
+# ==========================================================
+# FUNCIONES PRINCIPALES
+# ==========================================================
+
+def create_user(username: str, password: str, rol: str = "usuario"):
+    if username in usuarios:
+        return None
+
+    usuarios[username] = {
+        "username": username,
+        "password": hash_password(password),
+        "rol": rol,
+        "activo": True,
+        "api_key": None
+    }
+
+    return {
+        "username": username,
+        "rol": rol,
+        "activo": True
+    }
+
+def login_user(username: str, password: str) -> Optional[Dict[str, Any]]:
     user = usuarios.get(username)
+
     if not user:
         return None
+
     if not verify_password(password, user["password"]):
         return None
-    return user
 
-
-def create_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
+    if not user["activo"]:
         return None
+
+    # Genera nueva API Key al iniciar sesión
+    nueva_key = generar_api_key()
+    user["api_key"] = nueva_key
+
+    return {
+        "username": user["username"],
+        "rol": user["rol"],
+        "api_key": nueva_key
+    }
+
+def authenticate_with_api_key(api_key: str) -> Optional[Dict[str, Any]]:
+    for user in usuarios.values():
+        if user["api_key"] == api_key and user["activo"]:
+            return {
+                "username": user["username"],
+                "rol": user["rol"],
+                "activo": user["activo"]
+            }
+    return None
